@@ -148,14 +148,16 @@ async def proxy_v1(full_path: str, request: Request, x_proxy_token: Optional[str
             logger.exception("Request to OpenAI failed: %s", e)
             raise HTTPException(status_code=502, detail="bad_gateway")
 
-    # Parse response normally if not streaming
     if "application/json" in content_type:
         try:
-            # Safe decode: errors="replace" tránh crash khi byte lạ
-            resp_text = content.decode("utf-8", errors="replace")
-            logger.info("OpenAI response body: %s", resp_text)  # <-- in nguyên văn
-
-            # Thử parse JSON, nhưng không cần crash nếu fail
+            if isinstance(content, bytes):
+                try:
+                    resp_text = content.decode("utf-8")
+                    logger.info("OpenAI response body (decoded): %s", resp_text)
+                except UnicodeDecodeError:
+                    logger.warning("Response is not valid UTF-8, logging raw bytes")
+                    resp_text = content 
+                    logger.info("OpenAI response body (bytes): %s", resp_text)
             try:
                 resp_json = resp.json()
                 return JSONResponse(
@@ -164,7 +166,6 @@ async def proxy_v1(full_path: str, request: Request, x_proxy_token: Optional[str
                     headers=headers
                 )
             except Exception:
-                # trả raw content nếu parse fail
                 return Response(
                     content,
                     status_code=status_code,
@@ -173,7 +174,6 @@ async def proxy_v1(full_path: str, request: Request, x_proxy_token: Optional[str
                 )
 
         except Exception:
-            # fallback an toàn
             logger.exception("Unexpected error handling OpenAI response")
             return Response(
                 content,
@@ -188,3 +188,4 @@ async def proxy_v1(full_path: str, request: Request, x_proxy_token: Optional[str
             headers=headers,
             media_type=content_type or "application/octet-stream"
         )
+
