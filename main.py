@@ -151,15 +151,30 @@ async def proxy_v1(full_path: str, request: Request, x_proxy_token: Optional[str
     # Parse response normally if not streaming
     if "application/json" in content_type:
         try:
-            resp_text = content.decode("utf-8")
-            logger.info("OpenAI response body: %s", resp_text) 
-            return JSONResponse(
-                status_code=status_code,
-                content=resp.json(),
-                headers=headers
-            )
+            # Safe decode: errors="replace" tránh crash khi byte lạ
+            resp_text = content.decode("utf-8", errors="replace")
+            logger.info("OpenAI response body: %s", resp_text)  # <-- in nguyên văn
+
+            # Thử parse JSON, nhưng không cần crash nếu fail
+            try:
+                resp_json = resp.json()
+                return JSONResponse(
+                    status_code=status_code,
+                    content=resp_json,
+                    headers=headers
+                )
+            except Exception:
+                # trả raw content nếu parse fail
+                return Response(
+                    content,
+                    status_code=status_code,
+                    headers=headers,
+                    media_type=content_type
+                )
+
         except Exception:
-            logger.exception("Error handling OpenAI response: %s", e)
+            # fallback an toàn
+            logger.exception("Unexpected error handling OpenAI response")
             return Response(
                 content,
                 status_code=status_code,
