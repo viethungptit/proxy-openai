@@ -151,12 +151,15 @@ async def proxy_v1(full_path: str, request: Request, x_proxy_token: Optional[str
     # Parse response normally if not streaming
     if "application/json" in content_type:
         try:
+            resp_text = content.decode("utf-8")
+            logger.info("OpenAI response body: %s", resp_text) 
             return JSONResponse(
                 status_code=status_code,
                 content=resp.json(),
                 headers=headers
             )
         except Exception:
+            logger.exception("Error handling OpenAI response: %s", e)
             return Response(
                 content,
                 status_code=status_code,
